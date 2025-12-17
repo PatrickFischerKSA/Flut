@@ -1,0 +1,1339 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Jakob Wiedmer – Flut | Lektürearbeit I–XLI</title>
+<style>
+  body{
+    font-family: Cambria, serif;
+    margin:0;
+    padding:40px;
+    background:url('wengen_blur.jpg') no-repeat center center fixed;
+    background-size:cover;
+  }
+  .overlay{
+    background:rgba(255,255,255,0.92);
+    max-width:1150px;
+    margin:auto;
+    padding:40px;
+    border-radius:14px;
+  }
+  h1{margin-top:0}
+  h2{margin-top:2.2em}
+  .chapter{display:none; padding:18px 0; border-top:1px solid rgba(0,0,0,0.08);}
+  .chapter:first-of-type{border-top:none;}
+
+  .qtitle{margin:16px 0 6px 0; font-weight:700;}
+  textarea{
+    width:100%;
+    min-height:130px;
+    padding:12px;
+    font-family: Cambria, serif;
+    font-size:1em;
+    border-radius:10px;
+    border:1px solid rgba(0,0,0,0.25);
+    box-sizing:border-box;
+  }
+  textarea.answer{min-height:140px;}
+  textarea.short{min-height:110px;}
+
+  body.student textarea{background:#fdf6e8;}
+  body.teacher textarea{background:#eef4fb;}
+
+  .teacher-only{display:none;}
+  body.teacher .teacher-only{display:block;}
+
+  .controls{
+    position:fixed;
+    top:10px;
+    right:10px;
+    background:rgba(255,255,255,0.88);
+    padding:12px;
+    border-radius:12px;
+    border:1px solid rgba(0,0,0,0.15);
+    font-size:0.92em;
+    backdrop-filter: blur(4px);
+  }
+  .controls button{
+    margin:4px 0;
+    width:100%;
+    padding:8px 10px;
+    border-radius:10px;
+    border:1px solid rgba(0,0,0,0.2);
+    background:white;
+    cursor:pointer;
+  }
+  .controls button:hover{background:rgba(0,0,0,0.04);}
+
+  .progress{
+    position:fixed;
+    bottom:10px;
+    right:10px;
+    background:rgba(255,255,255,0.88);
+    padding:10px 12px;
+    border-radius:12px;
+    border:1px solid rgba(0,0,0,0.15);
+    font-size:0.92em;
+    backdrop-filter: blur(4px);
+  }
+
+  .unlock-btn{
+    margin-top:12px;
+    padding:10px 12px;
+    border-radius:10px;
+    border:1px solid rgba(0,0,0,0.2);
+    background:white;
+    cursor:pointer;
+  }
+  .unlock-btn:hover{background:rgba(0,0,0,0.04);}
+
+  iframe{width:100%; height:520px; border:1px solid rgba(0,0,0,0.2); border-radius:12px;}
+
+  @media print {
+    body{background:none; padding:0;}
+    .controls,.progress,iframe,.unlock-btn{display:none !important;}
+    .overlay{max-width:none; border-radius:0; padding:18px;}
+    textarea{border:none;}
+  }
+</style>
+
+<script>
+  const TEACHER_PW = 'flut';
+
+  function setMode(m) {
+    if (m === 'teacher') {
+      const pw = prompt('Passwort für Lehrerinnen-Modus:');
+      if (pw !== TEACHER_PW) {
+        alert('Falsches Passwort');
+        return;
+      }
+    }
+    localStorage.setItem('flut_mode', m);
+    document.body.classList.remove('student','teacher');
+    document.body.classList.add(m);
+  }
+
+  function saveAll() {
+    document.querySelectorAll('textarea').forEach(t => {
+      localStorage.setItem('flut_' + t.id, t.value);
+    });
+    // Save unlocked chapters count
+    const unlocked = document.querySelectorAll('.chapter[data-unlocked="true"]').length;
+    localStorage.setItem('flut_unlocked', String(unlocked));
+  }
+
+  function loadAll() {
+    document.querySelectorAll('textarea').forEach(t => {
+      const v = localStorage.getItem('flut_' + t.id);
+      if (v !== null) t.value = v;
+    });
+  }
+
+  function updateProgress() {
+    const unlocked = document.querySelectorAll('.chapter[data-unlocked="true"]').length;
+    document.getElementById('progressText').innerText = 'Freigeschaltet: ' + unlocked + ' / 41 Kapitel';
+  }
+
+  function unlockChapter(n) {
+    const chap = document.getElementById('chapter' + n);
+    if (!chap) return;
+    chap.style.display = 'block';
+    chap.setAttribute('data-unlocked','true');
+    updateProgress();
+    saveAll();
+    chap.scrollIntoView({behavior:'smooth', block:'start'});
+  }
+
+  function unlockNext(n) {
+    unlockChapter(n+1);
+  }
+
+  function resetAll() {
+    if(!confirm('Wirklich alles zurücksetzen (inkl. Speicherstand)?')) return;
+    // Remove stored keys
+    const keys = Object.keys(localStorage);
+    keys.filter(k => k.startsWith('flut_') || k === 'flut_unlocked' || k === 'flut_mode')
+        .forEach(k => localStorage.removeItem(k));
+
+    // Clear UI
+    document.querySelectorAll('textarea').forEach(t => t.value = '');
+    document.querySelectorAll('.chapter').forEach((c, idx) => {
+      if(idx===0) {
+        c.style.display='block';
+        c.setAttribute('data-unlocked','true');
+      } else {
+        c.style.display='none';
+        c.setAttribute('data-unlocked','false');
+      }
+    });
+    setMode('student');
+    updateProgress();
+  }
+
+  function exportPDF() {
+    window.print();
+  }
+
+  window.addEventListener('load', () => {
+    // Mode
+    const mode = localStorage.getItem('flut_mode') || 'student';
+    document.body.classList.add(mode);
+
+    // Unlock state
+    const unlocked = parseInt(localStorage.getItem('flut_unlocked') || '1', 10);
+    for(let i=1;i<=41;i++) {
+      const chap = document.getElementById('chapter'+i);
+      if(!chap) continue;
+      if(i<=unlocked) {
+        chap.style.display='block';
+        chap.setAttribute('data-unlocked','true');
+      } else {
+        chap.style.display='none';
+        chap.setAttribute('data-unlocked','false');
+      }
+    }
+
+    // Load textareas
+    loadAll();
+
+    // Autosave
+    document.querySelectorAll('textarea').forEach(t => t.addEventListener('input', saveAll));
+
+    updateProgress();
+  });
+</script>
+</head>
+<body class="student">
+  <div class="controls">
+    <div style="font-weight:700; margin-bottom:6px;">Modus</div>
+    <button onclick="setMode('student')">Schüler*innen</button>
+    <button onclick="setMode('teacher')">Lehrerinnen</button>
+    <div style="height:8px;"></div>
+    <button onclick="exportPDF()">Als PDF exportieren</button>
+    <button onclick="resetAll()">Reset</button>
+  </div>
+
+  <div class="progress"><span id="progressText"></span></div>
+
+  <div class="overlay">
+    <h1>Jakob Wiedmer: <em>Flut</em></h1>
+    <p><strong>Hinweis:</strong> Alles wird automatisch lokal im Browser gespeichert (LocalStorage). Keine Datenübertragung.</p>
+
+    <h2>Roman (weboptimiert)</h2>
+    <iframe src="JakobWiedmer_Flut_web.pdf" title="Flut PDF"></iframe>
+
+    <h2>Lektürearbeit Kapitel I–XLI</h2>
+    <p><em>Kapitel werden schrittweise freigeschaltet. Du kannst jederzeit exportieren (Druck → PDF).</em></p>
+
+
+    <section class="chapter" id="chapter1" data-unlocked="true" style="display:block">
+      <h2>Kapitel 1</h2>
+
+      <div class="qtitle">1) Inhaltssicherung (präzise): Was passiert in diesem Kapitel – in welcher Reihenfolge?</div>
+      <textarea class="answer" id="k1_q1" placeholder="Wichtig: konkrete Handlungsschritte, keine Allgemeinplätze."></textarea>
+
+      <div class="qtitle">2) Figuren: Wer handelt / spricht / entscheidet? Was wird über Motive oder Beziehungen sichtbar?</div>
+      <textarea class="answer" id="k1_q2" placeholder="Nenne Figuren + Textindizien (z.B. Verhalten, Aussagen, Konflikte)."></textarea>
+
+      <div class="qtitle">3) Raum & Natur: Welche Funktion haben Landschaft/Wetter/Naturbilder – Stimmung, Symbolik, Kontrast?</div>
+      <textarea class="answer short" id="k1_q3" placeholder="Beschreibe die Wirkung und (wenn möglich) eine Deutung."></textarea>
+
+      <div class="qtitle">4) Deutung/Analyse: Welche Spannung (sozial/moralisch/politisch) verdichtet sich hier – und wodurch?</div>
+      <textarea class="answer" id="k1_q4" placeholder="Arbeite mit Gegensätzen, Ursachen/Wirkungen, Figurenpositionen."></textarea>
+
+      <div class="qtitle">Persönliche Kommentare & Beobachtungen</div>
+      <textarea id="k1_c" placeholder="Eigene Fragen, Irritationen, Lieblingsstelle, Vermutungen, offene Punkte…"></textarea>
+
+      <div class="teacher-only">
+        <div class="qtitle">Lehrerinnen-Kommentar</div>
+        <textarea id="k1_t" placeholder="Feedback, Beobachtungen, Beurteilungshinweise, nächste Schritte…"></textarea>
+      </div>
+
+      <button class="unlock-btn" onclick="unlockNext(1)">Nächstes Kapitel freischalten</button>
+    </section>
+
+
+    <section class="chapter" id="chapter2" data-unlocked="false" style="display:none">
+      <h2>Kapitel 2</h2>
+
+      <div class="qtitle">1) Inhaltssicherung (präzise): Was passiert in diesem Kapitel – in welcher Reihenfolge?</div>
+      <textarea class="answer" id="k2_q1" placeholder="Wichtig: konkrete Handlungsschritte, keine Allgemeinplätze."></textarea>
+
+      <div class="qtitle">2) Figuren: Wer handelt / spricht / entscheidet? Was wird über Motive oder Beziehungen sichtbar?</div>
+      <textarea class="answer" id="k2_q2" placeholder="Nenne Figuren + Textindizien (z.B. Verhalten, Aussagen, Konflikte)."></textarea>
+
+      <div class="qtitle">3) Raum & Natur: Welche Funktion haben Landschaft/Wetter/Naturbilder – Stimmung, Symbolik, Kontrast?</div>
+      <textarea class="answer short" id="k2_q3" placeholder="Beschreibe die Wirkung und (wenn möglich) eine Deutung."></textarea>
+
+      <div class="qtitle">4) Deutung/Analyse: Welche Spannung (sozial/moralisch/politisch) verdichtet sich hier – und wodurch?</div>
+      <textarea class="answer" id="k2_q4" placeholder="Arbeite mit Gegensätzen, Ursachen/Wirkungen, Figurenpositionen."></textarea>
+
+      <div class="qtitle">Persönliche Kommentare & Beobachtungen</div>
+      <textarea id="k2_c" placeholder="Eigene Fragen, Irritationen, Lieblingsstelle, Vermutungen, offene Punkte…"></textarea>
+
+      <div class="teacher-only">
+        <div class="qtitle">Lehrerinnen-Kommentar</div>
+        <textarea id="k2_t" placeholder="Feedback, Beobachtungen, Beurteilungshinweise, nächste Schritte…"></textarea>
+      </div>
+
+      <button class="unlock-btn" onclick="unlockNext(2)">Nächstes Kapitel freischalten</button>
+    </section>
+
+
+    <section class="chapter" id="chapter3" data-unlocked="false" style="display:none">
+      <h2>Kapitel 3</h2>
+
+      <div class="qtitle">1) Inhaltssicherung (präzise): Was passiert in diesem Kapitel – in welcher Reihenfolge?</div>
+      <textarea class="answer" id="k3_q1" placeholder="Wichtig: konkrete Handlungsschritte, keine Allgemeinplätze."></textarea>
+
+      <div class="qtitle">2) Figuren: Wer handelt / spricht / entscheidet? Was wird über Motive oder Beziehungen sichtbar?</div>
+      <textarea class="answer" id="k3_q2" placeholder="Nenne Figuren + Textindizien (z.B. Verhalten, Aussagen, Konflikte)."></textarea>
+
+      <div class="qtitle">3) Raum & Natur: Welche Funktion haben Landschaft/Wetter/Naturbilder – Stimmung, Symbolik, Kontrast?</div>
+      <textarea class="answer short" id="k3_q3" placeholder="Beschreibe die Wirkung und (wenn möglich) eine Deutung."></textarea>
+
+      <div class="qtitle">4) Deutung/Analyse: Welche Spannung (sozial/moralisch/politisch) verdichtet sich hier – und wodurch?</div>
+      <textarea class="answer" id="k3_q4" placeholder="Arbeite mit Gegensätzen, Ursachen/Wirkungen, Figurenpositionen."></textarea>
+
+      <div class="qtitle">Persönliche Kommentare & Beobachtungen</div>
+      <textarea id="k3_c" placeholder="Eigene Fragen, Irritationen, Lieblingsstelle, Vermutungen, offene Punkte…"></textarea>
+
+      <div class="teacher-only">
+        <div class="qtitle">Lehrerinnen-Kommentar</div>
+        <textarea id="k3_t" placeholder="Feedback, Beobachtungen, Beurteilungshinweise, nächste Schritte…"></textarea>
+      </div>
+
+      <button class="unlock-btn" onclick="unlockNext(3)">Nächstes Kapitel freischalten</button>
+    </section>
+
+
+    <section class="chapter" id="chapter4" data-unlocked="false" style="display:none">
+      <h2>Kapitel 4</h2>
+
+      <div class="qtitle">1) Inhaltssicherung (präzise): Was passiert in diesem Kapitel – in welcher Reihenfolge?</div>
+      <textarea class="answer" id="k4_q1" placeholder="Wichtig: konkrete Handlungsschritte, keine Allgemeinplätze."></textarea>
+
+      <div class="qtitle">2) Figuren: Wer handelt / spricht / entscheidet? Was wird über Motive oder Beziehungen sichtbar?</div>
+      <textarea class="answer" id="k4_q2" placeholder="Nenne Figuren + Textindizien (z.B. Verhalten, Aussagen, Konflikte)."></textarea>
+
+      <div class="qtitle">3) Raum & Natur: Welche Funktion haben Landschaft/Wetter/Naturbilder – Stimmung, Symbolik, Kontrast?</div>
+      <textarea class="answer short" id="k4_q3" placeholder="Beschreibe die Wirkung und (wenn möglich) eine Deutung."></textarea>
+
+      <div class="qtitle">4) Deutung/Analyse: Welche Spannung (sozial/moralisch/politisch) verdichtet sich hier – und wodurch?</div>
+      <textarea class="answer" id="k4_q4" placeholder="Arbeite mit Gegensätzen, Ursachen/Wirkungen, Figurenpositionen."></textarea>
+
+      <div class="qtitle">Persönliche Kommentare & Beobachtungen</div>
+      <textarea id="k4_c" placeholder="Eigene Fragen, Irritationen, Lieblingsstelle, Vermutungen, offene Punkte…"></textarea>
+
+      <div class="teacher-only">
+        <div class="qtitle">Lehrerinnen-Kommentar</div>
+        <textarea id="k4_t" placeholder="Feedback, Beobachtungen, Beurteilungshinweise, nächste Schritte…"></textarea>
+      </div>
+
+      <button class="unlock-btn" onclick="unlockNext(4)">Nächstes Kapitel freischalten</button>
+    </section>
+
+
+    <section class="chapter" id="chapter5" data-unlocked="false" style="display:none">
+      <h2>Kapitel 5</h2>
+
+      <div class="qtitle">1) Inhaltssicherung (präzise): Was passiert in diesem Kapitel – in welcher Reihenfolge?</div>
+      <textarea class="answer" id="k5_q1" placeholder="Wichtig: konkrete Handlungsschritte, keine Allgemeinplätze."></textarea>
+
+      <div class="qtitle">2) Figuren: Wer handelt / spricht / entscheidet? Was wird über Motive oder Beziehungen sichtbar?</div>
+      <textarea class="answer" id="k5_q2" placeholder="Nenne Figuren + Textindizien (z.B. Verhalten, Aussagen, Konflikte)."></textarea>
+
+      <div class="qtitle">3) Raum & Natur: Welche Funktion haben Landschaft/Wetter/Naturbilder – Stimmung, Symbolik, Kontrast?</div>
+      <textarea class="answer short" id="k5_q3" placeholder="Beschreibe die Wirkung und (wenn möglich) eine Deutung."></textarea>
+
+      <div class="qtitle">4) Deutung/Analyse: Welche Spannung (sozial/moralisch/politisch) verdichtet sich hier – und wodurch?</div>
+      <textarea class="answer" id="k5_q4" placeholder="Arbeite mit Gegensätzen, Ursachen/Wirkungen, Figurenpositionen."></textarea>
+
+      <div class="qtitle">Persönliche Kommentare & Beobachtungen</div>
+      <textarea id="k5_c" placeholder="Eigene Fragen, Irritationen, Lieblingsstelle, Vermutungen, offene Punkte…"></textarea>
+
+      <div class="teacher-only">
+        <div class="qtitle">Lehrerinnen-Kommentar</div>
+        <textarea id="k5_t" placeholder="Feedback, Beobachtungen, Beurteilungshinweise, nächste Schritte…"></textarea>
+      </div>
+
+      <button class="unlock-btn" onclick="unlockNext(5)">Nächstes Kapitel freischalten</button>
+    </section>
+
+
+    <section class="chapter" id="chapter6" data-unlocked="false" style="display:none">
+      <h2>Kapitel 6</h2>
+
+      <div class="qtitle">1) Inhaltssicherung (präzise): Was passiert in diesem Kapitel – in welcher Reihenfolge?</div>
+      <textarea class="answer" id="k6_q1" placeholder="Wichtig: konkrete Handlungsschritte, keine Allgemeinplätze."></textarea>
+
+      <div class="qtitle">2) Figuren: Wer handelt / spricht / entscheidet? Was wird über Motive oder Beziehungen sichtbar?</div>
+      <textarea class="answer" id="k6_q2" placeholder="Nenne Figuren + Textindizien (z.B. Verhalten, Aussagen, Konflikte)."></textarea>
+
+      <div class="qtitle">3) Raum & Natur: Welche Funktion haben Landschaft/Wetter/Naturbilder – Stimmung, Symbolik, Kontrast?</div>
+      <textarea class="answer short" id="k6_q3" placeholder="Beschreibe die Wirkung und (wenn möglich) eine Deutung."></textarea>
+
+      <div class="qtitle">4) Deutung/Analyse: Welche Spannung (sozial/moralisch/politisch) verdichtet sich hier – und wodurch?</div>
+      <textarea class="answer" id="k6_q4" placeholder="Arbeite mit Gegensätzen, Ursachen/Wirkungen, Figurenpositionen."></textarea>
+
+      <div class="qtitle">Persönliche Kommentare & Beobachtungen</div>
+      <textarea id="k6_c" placeholder="Eigene Fragen, Irritationen, Lieblingsstelle, Vermutungen, offene Punkte…"></textarea>
+
+      <div class="teacher-only">
+        <div class="qtitle">Lehrerinnen-Kommentar</div>
+        <textarea id="k6_t" placeholder="Feedback, Beobachtungen, Beurteilungshinweise, nächste Schritte…"></textarea>
+      </div>
+
+      <button class="unlock-btn" onclick="unlockNext(6)">Nächstes Kapitel freischalten</button>
+    </section>
+
+
+    <section class="chapter" id="chapter7" data-unlocked="false" style="display:none">
+      <h2>Kapitel 7</h2>
+
+      <div class="qtitle">1) Inhaltssicherung (präzise): Was passiert in diesem Kapitel – in welcher Reihenfolge?</div>
+      <textarea class="answer" id="k7_q1" placeholder="Wichtig: konkrete Handlungsschritte, keine Allgemeinplätze."></textarea>
+
+      <div class="qtitle">2) Figuren: Wer handelt / spricht / entscheidet? Was wird über Motive oder Beziehungen sichtbar?</div>
+      <textarea class="answer" id="k7_q2" placeholder="Nenne Figuren + Textindizien (z.B. Verhalten, Aussagen, Konflikte)."></textarea>
+
+      <div class="qtitle">3) Raum & Natur: Welche Funktion haben Landschaft/Wetter/Naturbilder – Stimmung, Symbolik, Kontrast?</div>
+      <textarea class="answer short" id="k7_q3" placeholder="Beschreibe die Wirkung und (wenn möglich) eine Deutung."></textarea>
+
+      <div class="qtitle">4) Deutung/Analyse: Welche Spannung (sozial/moralisch/politisch) verdichtet sich hier – und wodurch?</div>
+      <textarea class="answer" id="k7_q4" placeholder="Arbeite mit Gegensätzen, Ursachen/Wirkungen, Figurenpositionen."></textarea>
+
+      <div class="qtitle">Persönliche Kommentare & Beobachtungen</div>
+      <textarea id="k7_c" placeholder="Eigene Fragen, Irritationen, Lieblingsstelle, Vermutungen, offene Punkte…"></textarea>
+
+      <div class="teacher-only">
+        <div class="qtitle">Lehrerinnen-Kommentar</div>
+        <textarea id="k7_t" placeholder="Feedback, Beobachtungen, Beurteilungshinweise, nächste Schritte…"></textarea>
+      </div>
+
+      <button class="unlock-btn" onclick="unlockNext(7)">Nächstes Kapitel freischalten</button>
+    </section>
+
+
+    <section class="chapter" id="chapter8" data-unlocked="false" style="display:none">
+      <h2>Kapitel 8</h2>
+
+      <div class="qtitle">1) Inhaltssicherung (präzise): Was passiert in diesem Kapitel – in welcher Reihenfolge?</div>
+      <textarea class="answer" id="k8_q1" placeholder="Wichtig: konkrete Handlungsschritte, keine Allgemeinplätze."></textarea>
+
+      <div class="qtitle">2) Figuren: Wer handelt / spricht / entscheidet? Was wird über Motive oder Beziehungen sichtbar?</div>
+      <textarea class="answer" id="k8_q2" placeholder="Nenne Figuren + Textindizien (z.B. Verhalten, Aussagen, Konflikte)."></textarea>
+
+      <div class="qtitle">3) Raum & Natur: Welche Funktion haben Landschaft/Wetter/Naturbilder – Stimmung, Symbolik, Kontrast?</div>
+      <textarea class="answer short" id="k8_q3" placeholder="Beschreibe die Wirkung und (wenn möglich) eine Deutung."></textarea>
+
+      <div class="qtitle">4) Deutung/Analyse: Welche Spannung (sozial/moralisch/politisch) verdichtet sich hier – und wodurch?</div>
+      <textarea class="answer" id="k8_q4" placeholder="Arbeite mit Gegensätzen, Ursachen/Wirkungen, Figurenpositionen."></textarea>
+
+      <div class="qtitle">Persönliche Kommentare & Beobachtungen</div>
+      <textarea id="k8_c" placeholder="Eigene Fragen, Irritationen, Lieblingsstelle, Vermutungen, offene Punkte…"></textarea>
+
+      <div class="teacher-only">
+        <div class="qtitle">Lehrerinnen-Kommentar</div>
+        <textarea id="k8_t" placeholder="Feedback, Beobachtungen, Beurteilungshinweise, nächste Schritte…"></textarea>
+      </div>
+
+      <button class="unlock-btn" onclick="unlockNext(8)">Nächstes Kapitel freischalten</button>
+    </section>
+
+
+    <section class="chapter" id="chapter9" data-unlocked="false" style="display:none">
+      <h2>Kapitel 9</h2>
+
+      <div class="qtitle">1) Inhaltssicherung (präzise): Was passiert in diesem Kapitel – in welcher Reihenfolge?</div>
+      <textarea class="answer" id="k9_q1" placeholder="Wichtig: konkrete Handlungsschritte, keine Allgemeinplätze."></textarea>
+
+      <div class="qtitle">2) Figuren: Wer handelt / spricht / entscheidet? Was wird über Motive oder Beziehungen sichtbar?</div>
+      <textarea class="answer" id="k9_q2" placeholder="Nenne Figuren + Textindizien (z.B. Verhalten, Aussagen, Konflikte)."></textarea>
+
+      <div class="qtitle">3) Raum & Natur: Welche Funktion haben Landschaft/Wetter/Naturbilder – Stimmung, Symbolik, Kontrast?</div>
+      <textarea class="answer short" id="k9_q3" placeholder="Beschreibe die Wirkung und (wenn möglich) eine Deutung."></textarea>
+
+      <div class="qtitle">4) Deutung/Analyse: Welche Spannung (sozial/moralisch/politisch) verdichtet sich hier – und wodurch?</div>
+      <textarea class="answer" id="k9_q4" placeholder="Arbeite mit Gegensätzen, Ursachen/Wirkungen, Figurenpositionen."></textarea>
+
+      <div class="qtitle">Persönliche Kommentare & Beobachtungen</div>
+      <textarea id="k9_c" placeholder="Eigene Fragen, Irritationen, Lieblingsstelle, Vermutungen, offene Punkte…"></textarea>
+
+      <div class="teacher-only">
+        <div class="qtitle">Lehrerinnen-Kommentar</div>
+        <textarea id="k9_t" placeholder="Feedback, Beobachtungen, Beurteilungshinweise, nächste Schritte…"></textarea>
+      </div>
+
+      <button class="unlock-btn" onclick="unlockNext(9)">Nächstes Kapitel freischalten</button>
+    </section>
+
+
+    <section class="chapter" id="chapter10" data-unlocked="false" style="display:none">
+      <h2>Kapitel 10</h2>
+
+      <div class="qtitle">1) Inhaltssicherung (präzise): Was passiert in diesem Kapitel – in welcher Reihenfolge?</div>
+      <textarea class="answer" id="k10_q1" placeholder="Wichtig: konkrete Handlungsschritte, keine Allgemeinplätze."></textarea>
+
+      <div class="qtitle">2) Figuren: Wer handelt / spricht / entscheidet? Was wird über Motive oder Beziehungen sichtbar?</div>
+      <textarea class="answer" id="k10_q2" placeholder="Nenne Figuren + Textindizien (z.B. Verhalten, Aussagen, Konflikte)."></textarea>
+
+      <div class="qtitle">3) Raum & Natur: Welche Funktion haben Landschaft/Wetter/Naturbilder – Stimmung, Symbolik, Kontrast?</div>
+      <textarea class="answer short" id="k10_q3" placeholder="Beschreibe die Wirkung und (wenn möglich) eine Deutung."></textarea>
+
+      <div class="qtitle">4) Deutung/Analyse: Welche Spannung (sozial/moralisch/politisch) verdichtet sich hier – und wodurch?</div>
+      <textarea class="answer" id="k10_q4" placeholder="Arbeite mit Gegensätzen, Ursachen/Wirkungen, Figurenpositionen."></textarea>
+
+      <div class="qtitle">Persönliche Kommentare & Beobachtungen</div>
+      <textarea id="k10_c" placeholder="Eigene Fragen, Irritationen, Lieblingsstelle, Vermutungen, offene Punkte…"></textarea>
+
+      <div class="teacher-only">
+        <div class="qtitle">Lehrerinnen-Kommentar</div>
+        <textarea id="k10_t" placeholder="Feedback, Beobachtungen, Beurteilungshinweise, nächste Schritte…"></textarea>
+      </div>
+
+      <button class="unlock-btn" onclick="unlockNext(10)">Nächstes Kapitel freischalten</button>
+    </section>
+
+
+    <section class="chapter" id="chapter11" data-unlocked="false" style="display:none">
+      <h2>Kapitel 11</h2>
+
+      <div class="qtitle">1) Inhaltssicherung (präzise): Was passiert in diesem Kapitel – in welcher Reihenfolge?</div>
+      <textarea class="answer" id="k11_q1" placeholder="Wichtig: konkrete Handlungsschritte, keine Allgemeinplätze."></textarea>
+
+      <div class="qtitle">2) Figuren: Wer handelt / spricht / entscheidet? Was wird über Motive oder Beziehungen sichtbar?</div>
+      <textarea class="answer" id="k11_q2" placeholder="Nenne Figuren + Textindizien (z.B. Verhalten, Aussagen, Konflikte)."></textarea>
+
+      <div class="qtitle">3) Raum & Natur: Welche Funktion haben Landschaft/Wetter/Naturbilder – Stimmung, Symbolik, Kontrast?</div>
+      <textarea class="answer short" id="k11_q3" placeholder="Beschreibe die Wirkung und (wenn möglich) eine Deutung."></textarea>
+
+      <div class="qtitle">4) Deutung/Analyse: Welche Spannung (sozial/moralisch/politisch) verdichtet sich hier – und wodurch?</div>
+      <textarea class="answer" id="k11_q4" placeholder="Arbeite mit Gegensätzen, Ursachen/Wirkungen, Figurenpositionen."></textarea>
+
+      <div class="qtitle">Persönliche Kommentare & Beobachtungen</div>
+      <textarea id="k11_c" placeholder="Eigene Fragen, Irritationen, Lieblingsstelle, Vermutungen, offene Punkte…"></textarea>
+
+      <div class="teacher-only">
+        <div class="qtitle">Lehrerinnen-Kommentar</div>
+        <textarea id="k11_t" placeholder="Feedback, Beobachtungen, Beurteilungshinweise, nächste Schritte…"></textarea>
+      </div>
+
+      <button class="unlock-btn" onclick="unlockNext(11)">Nächstes Kapitel freischalten</button>
+    </section>
+
+
+    <section class="chapter" id="chapter12" data-unlocked="false" style="display:none">
+      <h2>Kapitel 12</h2>
+
+      <div class="qtitle">1) Inhaltssicherung (präzise): Was passiert in diesem Kapitel – in welcher Reihenfolge?</div>
+      <textarea class="answer" id="k12_q1" placeholder="Wichtig: konkrete Handlungsschritte, keine Allgemeinplätze."></textarea>
+
+      <div class="qtitle">2) Figuren: Wer handelt / spricht / entscheidet? Was wird über Motive oder Beziehungen sichtbar?</div>
+      <textarea class="answer" id="k12_q2" placeholder="Nenne Figuren + Textindizien (z.B. Verhalten, Aussagen, Konflikte)."></textarea>
+
+      <div class="qtitle">3) Raum & Natur: Welche Funktion haben Landschaft/Wetter/Naturbilder – Stimmung, Symbolik, Kontrast?</div>
+      <textarea class="answer short" id="k12_q3" placeholder="Beschreibe die Wirkung und (wenn möglich) eine Deutung."></textarea>
+
+      <div class="qtitle">4) Deutung/Analyse: Welche Spannung (sozial/moralisch/politisch) verdichtet sich hier – und wodurch?</div>
+      <textarea class="answer" id="k12_q4" placeholder="Arbeite mit Gegensätzen, Ursachen/Wirkungen, Figurenpositionen."></textarea>
+
+      <div class="qtitle">Persönliche Kommentare & Beobachtungen</div>
+      <textarea id="k12_c" placeholder="Eigene Fragen, Irritationen, Lieblingsstelle, Vermutungen, offene Punkte…"></textarea>
+
+      <div class="teacher-only">
+        <div class="qtitle">Lehrerinnen-Kommentar</div>
+        <textarea id="k12_t" placeholder="Feedback, Beobachtungen, Beurteilungshinweise, nächste Schritte…"></textarea>
+      </div>
+
+      <button class="unlock-btn" onclick="unlockNext(12)">Nächstes Kapitel freischalten</button>
+    </section>
+
+
+    <section class="chapter" id="chapter13" data-unlocked="false" style="display:none">
+      <h2>Kapitel 13</h2>
+
+      <div class="qtitle">1) Inhaltssicherung (präzise): Was passiert in diesem Kapitel – in welcher Reihenfolge?</div>
+      <textarea class="answer" id="k13_q1" placeholder="Wichtig: konkrete Handlungsschritte, keine Allgemeinplätze."></textarea>
+
+      <div class="qtitle">2) Figuren: Wer handelt / spricht / entscheidet? Was wird über Motive oder Beziehungen sichtbar?</div>
+      <textarea class="answer" id="k13_q2" placeholder="Nenne Figuren + Textindizien (z.B. Verhalten, Aussagen, Konflikte)."></textarea>
+
+      <div class="qtitle">3) Raum & Natur: Welche Funktion haben Landschaft/Wetter/Naturbilder – Stimmung, Symbolik, Kontrast?</div>
+      <textarea class="answer short" id="k13_q3" placeholder="Beschreibe die Wirkung und (wenn möglich) eine Deutung."></textarea>
+
+      <div class="qtitle">4) Deutung/Analyse: Welche Spannung (sozial/moralisch/politisch) verdichtet sich hier – und wodurch?</div>
+      <textarea class="answer" id="k13_q4" placeholder="Arbeite mit Gegensätzen, Ursachen/Wirkungen, Figurenpositionen."></textarea>
+
+      <div class="qtitle">Persönliche Kommentare & Beobachtungen</div>
+      <textarea id="k13_c" placeholder="Eigene Fragen, Irritationen, Lieblingsstelle, Vermutungen, offene Punkte…"></textarea>
+
+      <div class="teacher-only">
+        <div class="qtitle">Lehrerinnen-Kommentar</div>
+        <textarea id="k13_t" placeholder="Feedback, Beobachtungen, Beurteilungshinweise, nächste Schritte…"></textarea>
+      </div>
+
+      <button class="unlock-btn" onclick="unlockNext(13)">Nächstes Kapitel freischalten</button>
+    </section>
+
+
+    <section class="chapter" id="chapter14" data-unlocked="false" style="display:none">
+      <h2>Kapitel 14</h2>
+
+      <div class="qtitle">1) Inhaltssicherung (präzise): Was passiert in diesem Kapitel – in welcher Reihenfolge?</div>
+      <textarea class="answer" id="k14_q1" placeholder="Wichtig: konkrete Handlungsschritte, keine Allgemeinplätze."></textarea>
+
+      <div class="qtitle">2) Figuren: Wer handelt / spricht / entscheidet? Was wird über Motive oder Beziehungen sichtbar?</div>
+      <textarea class="answer" id="k14_q2" placeholder="Nenne Figuren + Textindizien (z.B. Verhalten, Aussagen, Konflikte)."></textarea>
+
+      <div class="qtitle">3) Raum & Natur: Welche Funktion haben Landschaft/Wetter/Naturbilder – Stimmung, Symbolik, Kontrast?</div>
+      <textarea class="answer short" id="k14_q3" placeholder="Beschreibe die Wirkung und (wenn möglich) eine Deutung."></textarea>
+
+      <div class="qtitle">4) Deutung/Analyse: Welche Spannung (sozial/moralisch/politisch) verdichtet sich hier – und wodurch?</div>
+      <textarea class="answer" id="k14_q4" placeholder="Arbeite mit Gegensätzen, Ursachen/Wirkungen, Figurenpositionen."></textarea>
+
+      <div class="qtitle">Persönliche Kommentare & Beobachtungen</div>
+      <textarea id="k14_c" placeholder="Eigene Fragen, Irritationen, Lieblingsstelle, Vermutungen, offene Punkte…"></textarea>
+
+      <div class="teacher-only">
+        <div class="qtitle">Lehrerinnen-Kommentar</div>
+        <textarea id="k14_t" placeholder="Feedback, Beobachtungen, Beurteilungshinweise, nächste Schritte…"></textarea>
+      </div>
+
+      <button class="unlock-btn" onclick="unlockNext(14)">Nächstes Kapitel freischalten</button>
+    </section>
+
+
+    <section class="chapter" id="chapter15" data-unlocked="false" style="display:none">
+      <h2>Kapitel 15</h2>
+
+      <div class="qtitle">1) Inhaltssicherung (präzise): Was passiert in diesem Kapitel – in welcher Reihenfolge?</div>
+      <textarea class="answer" id="k15_q1" placeholder="Wichtig: konkrete Handlungsschritte, keine Allgemeinplätze."></textarea>
+
+      <div class="qtitle">2) Figuren: Wer handelt / spricht / entscheidet? Was wird über Motive oder Beziehungen sichtbar?</div>
+      <textarea class="answer" id="k15_q2" placeholder="Nenne Figuren + Textindizien (z.B. Verhalten, Aussagen, Konflikte)."></textarea>
+
+      <div class="qtitle">3) Raum & Natur: Welche Funktion haben Landschaft/Wetter/Naturbilder – Stimmung, Symbolik, Kontrast?</div>
+      <textarea class="answer short" id="k15_q3" placeholder="Beschreibe die Wirkung und (wenn möglich) eine Deutung."></textarea>
+
+      <div class="qtitle">4) Deutung/Analyse: Welche Spannung (sozial/moralisch/politisch) verdichtet sich hier – und wodurch?</div>
+      <textarea class="answer" id="k15_q4" placeholder="Arbeite mit Gegensätzen, Ursachen/Wirkungen, Figurenpositionen."></textarea>
+
+      <div class="qtitle">Persönliche Kommentare & Beobachtungen</div>
+      <textarea id="k15_c" placeholder="Eigene Fragen, Irritationen, Lieblingsstelle, Vermutungen, offene Punkte…"></textarea>
+
+      <div class="teacher-only">
+        <div class="qtitle">Lehrerinnen-Kommentar</div>
+        <textarea id="k15_t" placeholder="Feedback, Beobachtungen, Beurteilungshinweise, nächste Schritte…"></textarea>
+      </div>
+
+      <button class="unlock-btn" onclick="unlockNext(15)">Nächstes Kapitel freischalten</button>
+    </section>
+
+
+    <section class="chapter" id="chapter16" data-unlocked="false" style="display:none">
+      <h2>Kapitel 16</h2>
+
+      <div class="qtitle">1) Inhaltssicherung (präzise): Was passiert in diesem Kapitel – in welcher Reihenfolge?</div>
+      <textarea class="answer" id="k16_q1" placeholder="Wichtig: konkrete Handlungsschritte, keine Allgemeinplätze."></textarea>
+
+      <div class="qtitle">2) Figuren: Wer handelt / spricht / entscheidet? Was wird über Motive oder Beziehungen sichtbar?</div>
+      <textarea class="answer" id="k16_q2" placeholder="Nenne Figuren + Textindizien (z.B. Verhalten, Aussagen, Konflikte)."></textarea>
+
+      <div class="qtitle">3) Raum & Natur: Welche Funktion haben Landschaft/Wetter/Naturbilder – Stimmung, Symbolik, Kontrast?</div>
+      <textarea class="answer short" id="k16_q3" placeholder="Beschreibe die Wirkung und (wenn möglich) eine Deutung."></textarea>
+
+      <div class="qtitle">4) Deutung/Analyse: Welche Spannung (sozial/moralisch/politisch) verdichtet sich hier – und wodurch?</div>
+      <textarea class="answer" id="k16_q4" placeholder="Arbeite mit Gegensätzen, Ursachen/Wirkungen, Figurenpositionen."></textarea>
+
+      <div class="qtitle">Persönliche Kommentare & Beobachtungen</div>
+      <textarea id="k16_c" placeholder="Eigene Fragen, Irritationen, Lieblingsstelle, Vermutungen, offene Punkte…"></textarea>
+
+      <div class="teacher-only">
+        <div class="qtitle">Lehrerinnen-Kommentar</div>
+        <textarea id="k16_t" placeholder="Feedback, Beobachtungen, Beurteilungshinweise, nächste Schritte…"></textarea>
+      </div>
+
+      <button class="unlock-btn" onclick="unlockNext(16)">Nächstes Kapitel freischalten</button>
+    </section>
+
+
+    <section class="chapter" id="chapter17" data-unlocked="false" style="display:none">
+      <h2>Kapitel 17</h2>
+
+      <div class="qtitle">1) Inhaltssicherung (präzise): Was passiert in diesem Kapitel – in welcher Reihenfolge?</div>
+      <textarea class="answer" id="k17_q1" placeholder="Wichtig: konkrete Handlungsschritte, keine Allgemeinplätze."></textarea>
+
+      <div class="qtitle">2) Figuren: Wer handelt / spricht / entscheidet? Was wird über Motive oder Beziehungen sichtbar?</div>
+      <textarea class="answer" id="k17_q2" placeholder="Nenne Figuren + Textindizien (z.B. Verhalten, Aussagen, Konflikte)."></textarea>
+
+      <div class="qtitle">3) Raum & Natur: Welche Funktion haben Landschaft/Wetter/Naturbilder – Stimmung, Symbolik, Kontrast?</div>
+      <textarea class="answer short" id="k17_q3" placeholder="Beschreibe die Wirkung und (wenn möglich) eine Deutung."></textarea>
+
+      <div class="qtitle">4) Deutung/Analyse: Welche Spannung (sozial/moralisch/politisch) verdichtet sich hier – und wodurch?</div>
+      <textarea class="answer" id="k17_q4" placeholder="Arbeite mit Gegensätzen, Ursachen/Wirkungen, Figurenpositionen."></textarea>
+
+      <div class="qtitle">Persönliche Kommentare & Beobachtungen</div>
+      <textarea id="k17_c" placeholder="Eigene Fragen, Irritationen, Lieblingsstelle, Vermutungen, offene Punkte…"></textarea>
+
+      <div class="teacher-only">
+        <div class="qtitle">Lehrerinnen-Kommentar</div>
+        <textarea id="k17_t" placeholder="Feedback, Beobachtungen, Beurteilungshinweise, nächste Schritte…"></textarea>
+      </div>
+
+      <button class="unlock-btn" onclick="unlockNext(17)">Nächstes Kapitel freischalten</button>
+    </section>
+
+
+    <section class="chapter" id="chapter18" data-unlocked="false" style="display:none">
+      <h2>Kapitel 18</h2>
+
+      <div class="qtitle">1) Inhaltssicherung (präzise): Was passiert in diesem Kapitel – in welcher Reihenfolge?</div>
+      <textarea class="answer" id="k18_q1" placeholder="Wichtig: konkrete Handlungsschritte, keine Allgemeinplätze."></textarea>
+
+      <div class="qtitle">2) Figuren: Wer handelt / spricht / entscheidet? Was wird über Motive oder Beziehungen sichtbar?</div>
+      <textarea class="answer" id="k18_q2" placeholder="Nenne Figuren + Textindizien (z.B. Verhalten, Aussagen, Konflikte)."></textarea>
+
+      <div class="qtitle">3) Raum & Natur: Welche Funktion haben Landschaft/Wetter/Naturbilder – Stimmung, Symbolik, Kontrast?</div>
+      <textarea class="answer short" id="k18_q3" placeholder="Beschreibe die Wirkung und (wenn möglich) eine Deutung."></textarea>
+
+      <div class="qtitle">4) Deutung/Analyse: Welche Spannung (sozial/moralisch/politisch) verdichtet sich hier – und wodurch?</div>
+      <textarea class="answer" id="k18_q4" placeholder="Arbeite mit Gegensätzen, Ursachen/Wirkungen, Figurenpositionen."></textarea>
+
+      <div class="qtitle">Persönliche Kommentare & Beobachtungen</div>
+      <textarea id="k18_c" placeholder="Eigene Fragen, Irritationen, Lieblingsstelle, Vermutungen, offene Punkte…"></textarea>
+
+      <div class="teacher-only">
+        <div class="qtitle">Lehrerinnen-Kommentar</div>
+        <textarea id="k18_t" placeholder="Feedback, Beobachtungen, Beurteilungshinweise, nächste Schritte…"></textarea>
+      </div>
+
+      <button class="unlock-btn" onclick="unlockNext(18)">Nächstes Kapitel freischalten</button>
+    </section>
+
+
+    <section class="chapter" id="chapter19" data-unlocked="false" style="display:none">
+      <h2>Kapitel 19</h2>
+
+      <div class="qtitle">1) Inhaltssicherung (präzise): Was passiert in diesem Kapitel – in welcher Reihenfolge?</div>
+      <textarea class="answer" id="k19_q1" placeholder="Wichtig: konkrete Handlungsschritte, keine Allgemeinplätze."></textarea>
+
+      <div class="qtitle">2) Figuren: Wer handelt / spricht / entscheidet? Was wird über Motive oder Beziehungen sichtbar?</div>
+      <textarea class="answer" id="k19_q2" placeholder="Nenne Figuren + Textindizien (z.B. Verhalten, Aussagen, Konflikte)."></textarea>
+
+      <div class="qtitle">3) Raum & Natur: Welche Funktion haben Landschaft/Wetter/Naturbilder – Stimmung, Symbolik, Kontrast?</div>
+      <textarea class="answer short" id="k19_q3" placeholder="Beschreibe die Wirkung und (wenn möglich) eine Deutung."></textarea>
+
+      <div class="qtitle">4) Deutung/Analyse: Welche Spannung (sozial/moralisch/politisch) verdichtet sich hier – und wodurch?</div>
+      <textarea class="answer" id="k19_q4" placeholder="Arbeite mit Gegensätzen, Ursachen/Wirkungen, Figurenpositionen."></textarea>
+
+      <div class="qtitle">Persönliche Kommentare & Beobachtungen</div>
+      <textarea id="k19_c" placeholder="Eigene Fragen, Irritationen, Lieblingsstelle, Vermutungen, offene Punkte…"></textarea>
+
+      <div class="teacher-only">
+        <div class="qtitle">Lehrerinnen-Kommentar</div>
+        <textarea id="k19_t" placeholder="Feedback, Beobachtungen, Beurteilungshinweise, nächste Schritte…"></textarea>
+      </div>
+
+      <button class="unlock-btn" onclick="unlockNext(19)">Nächstes Kapitel freischalten</button>
+    </section>
+
+
+    <section class="chapter" id="chapter20" data-unlocked="false" style="display:none">
+      <h2>Kapitel 20</h2>
+
+      <div class="qtitle">1) Inhaltssicherung (präzise): Was passiert in diesem Kapitel – in welcher Reihenfolge?</div>
+      <textarea class="answer" id="k20_q1" placeholder="Wichtig: konkrete Handlungsschritte, keine Allgemeinplätze."></textarea>
+
+      <div class="qtitle">2) Figuren: Wer handelt / spricht / entscheidet? Was wird über Motive oder Beziehungen sichtbar?</div>
+      <textarea class="answer" id="k20_q2" placeholder="Nenne Figuren + Textindizien (z.B. Verhalten, Aussagen, Konflikte)."></textarea>
+
+      <div class="qtitle">3) Raum & Natur: Welche Funktion haben Landschaft/Wetter/Naturbilder – Stimmung, Symbolik, Kontrast?</div>
+      <textarea class="answer short" id="k20_q3" placeholder="Beschreibe die Wirkung und (wenn möglich) eine Deutung."></textarea>
+
+      <div class="qtitle">4) Deutung/Analyse: Welche Spannung (sozial/moralisch/politisch) verdichtet sich hier – und wodurch?</div>
+      <textarea class="answer" id="k20_q4" placeholder="Arbeite mit Gegensätzen, Ursachen/Wirkungen, Figurenpositionen."></textarea>
+
+      <div class="qtitle">Persönliche Kommentare & Beobachtungen</div>
+      <textarea id="k20_c" placeholder="Eigene Fragen, Irritationen, Lieblingsstelle, Vermutungen, offene Punkte…"></textarea>
+
+      <div class="teacher-only">
+        <div class="qtitle">Lehrerinnen-Kommentar</div>
+        <textarea id="k20_t" placeholder="Feedback, Beobachtungen, Beurteilungshinweise, nächste Schritte…"></textarea>
+      </div>
+
+      <button class="unlock-btn" onclick="unlockNext(20)">Nächstes Kapitel freischalten</button>
+    </section>
+
+
+    <section class="chapter" id="chapter21" data-unlocked="false" style="display:none">
+      <h2>Kapitel 21</h2>
+
+      <div class="qtitle">1) Inhaltssicherung (präzise): Was passiert in diesem Kapitel – in welcher Reihenfolge?</div>
+      <textarea class="answer" id="k21_q1" placeholder="Wichtig: konkrete Handlungsschritte, keine Allgemeinplätze."></textarea>
+
+      <div class="qtitle">2) Figuren: Wer handelt / spricht / entscheidet? Was wird über Motive oder Beziehungen sichtbar?</div>
+      <textarea class="answer" id="k21_q2" placeholder="Nenne Figuren + Textindizien (z.B. Verhalten, Aussagen, Konflikte)."></textarea>
+
+      <div class="qtitle">3) Raum & Natur: Welche Funktion haben Landschaft/Wetter/Naturbilder – Stimmung, Symbolik, Kontrast?</div>
+      <textarea class="answer short" id="k21_q3" placeholder="Beschreibe die Wirkung und (wenn möglich) eine Deutung."></textarea>
+
+      <div class="qtitle">4) Deutung/Analyse: Welche Spannung (sozial/moralisch/politisch) verdichtet sich hier – und wodurch?</div>
+      <textarea class="answer" id="k21_q4" placeholder="Arbeite mit Gegensätzen, Ursachen/Wirkungen, Figurenpositionen."></textarea>
+
+      <div class="qtitle">Persönliche Kommentare & Beobachtungen</div>
+      <textarea id="k21_c" placeholder="Eigene Fragen, Irritationen, Lieblingsstelle, Vermutungen, offene Punkte…"></textarea>
+
+      <div class="teacher-only">
+        <div class="qtitle">Lehrerinnen-Kommentar</div>
+        <textarea id="k21_t" placeholder="Feedback, Beobachtungen, Beurteilungshinweise, nächste Schritte…"></textarea>
+      </div>
+
+      <button class="unlock-btn" onclick="unlockNext(21)">Nächstes Kapitel freischalten</button>
+    </section>
+
+
+    <section class="chapter" id="chapter22" data-unlocked="false" style="display:none">
+      <h2>Kapitel 22</h2>
+
+      <div class="qtitle">1) Inhaltssicherung (präzise): Was passiert in diesem Kapitel – in welcher Reihenfolge?</div>
+      <textarea class="answer" id="k22_q1" placeholder="Wichtig: konkrete Handlungsschritte, keine Allgemeinplätze."></textarea>
+
+      <div class="qtitle">2) Figuren: Wer handelt / spricht / entscheidet? Was wird über Motive oder Beziehungen sichtbar?</div>
+      <textarea class="answer" id="k22_q2" placeholder="Nenne Figuren + Textindizien (z.B. Verhalten, Aussagen, Konflikte)."></textarea>
+
+      <div class="qtitle">3) Raum & Natur: Welche Funktion haben Landschaft/Wetter/Naturbilder – Stimmung, Symbolik, Kontrast?</div>
+      <textarea class="answer short" id="k22_q3" placeholder="Beschreibe die Wirkung und (wenn möglich) eine Deutung."></textarea>
+
+      <div class="qtitle">4) Deutung/Analyse: Welche Spannung (sozial/moralisch/politisch) verdichtet sich hier – und wodurch?</div>
+      <textarea class="answer" id="k22_q4" placeholder="Arbeite mit Gegensätzen, Ursachen/Wirkungen, Figurenpositionen."></textarea>
+
+      <div class="qtitle">Persönliche Kommentare & Beobachtungen</div>
+      <textarea id="k22_c" placeholder="Eigene Fragen, Irritationen, Lieblingsstelle, Vermutungen, offene Punkte…"></textarea>
+
+      <div class="teacher-only">
+        <div class="qtitle">Lehrerinnen-Kommentar</div>
+        <textarea id="k22_t" placeholder="Feedback, Beobachtungen, Beurteilungshinweise, nächste Schritte…"></textarea>
+      </div>
+
+      <button class="unlock-btn" onclick="unlockNext(22)">Nächstes Kapitel freischalten</button>
+    </section>
+
+
+    <section class="chapter" id="chapter23" data-unlocked="false" style="display:none">
+      <h2>Kapitel 23</h2>
+
+      <div class="qtitle">1) Inhaltssicherung (präzise): Was passiert in diesem Kapitel – in welcher Reihenfolge?</div>
+      <textarea class="answer" id="k23_q1" placeholder="Wichtig: konkrete Handlungsschritte, keine Allgemeinplätze."></textarea>
+
+      <div class="qtitle">2) Figuren: Wer handelt / spricht / entscheidet? Was wird über Motive oder Beziehungen sichtbar?</div>
+      <textarea class="answer" id="k23_q2" placeholder="Nenne Figuren + Textindizien (z.B. Verhalten, Aussagen, Konflikte)."></textarea>
+
+      <div class="qtitle">3) Raum & Natur: Welche Funktion haben Landschaft/Wetter/Naturbilder – Stimmung, Symbolik, Kontrast?</div>
+      <textarea class="answer short" id="k23_q3" placeholder="Beschreibe die Wirkung und (wenn möglich) eine Deutung."></textarea>
+
+      <div class="qtitle">4) Deutung/Analyse: Welche Spannung (sozial/moralisch/politisch) verdichtet sich hier – und wodurch?</div>
+      <textarea class="answer" id="k23_q4" placeholder="Arbeite mit Gegensätzen, Ursachen/Wirkungen, Figurenpositionen."></textarea>
+
+      <div class="qtitle">Persönliche Kommentare & Beobachtungen</div>
+      <textarea id="k23_c" placeholder="Eigene Fragen, Irritationen, Lieblingsstelle, Vermutungen, offene Punkte…"></textarea>
+
+      <div class="teacher-only">
+        <div class="qtitle">Lehrerinnen-Kommentar</div>
+        <textarea id="k23_t" placeholder="Feedback, Beobachtungen, Beurteilungshinweise, nächste Schritte…"></textarea>
+      </div>
+
+      <button class="unlock-btn" onclick="unlockNext(23)">Nächstes Kapitel freischalten</button>
+    </section>
+
+
+    <section class="chapter" id="chapter24" data-unlocked="false" style="display:none">
+      <h2>Kapitel 24</h2>
+
+      <div class="qtitle">1) Inhaltssicherung (präzise): Was passiert in diesem Kapitel – in welcher Reihenfolge?</div>
+      <textarea class="answer" id="k24_q1" placeholder="Wichtig: konkrete Handlungsschritte, keine Allgemeinplätze."></textarea>
+
+      <div class="qtitle">2) Figuren: Wer handelt / spricht / entscheidet? Was wird über Motive oder Beziehungen sichtbar?</div>
+      <textarea class="answer" id="k24_q2" placeholder="Nenne Figuren + Textindizien (z.B. Verhalten, Aussagen, Konflikte)."></textarea>
+
+      <div class="qtitle">3) Raum & Natur: Welche Funktion haben Landschaft/Wetter/Naturbilder – Stimmung, Symbolik, Kontrast?</div>
+      <textarea class="answer short" id="k24_q3" placeholder="Beschreibe die Wirkung und (wenn möglich) eine Deutung."></textarea>
+
+      <div class="qtitle">4) Deutung/Analyse: Welche Spannung (sozial/moralisch/politisch) verdichtet sich hier – und wodurch?</div>
+      <textarea class="answer" id="k24_q4" placeholder="Arbeite mit Gegensätzen, Ursachen/Wirkungen, Figurenpositionen."></textarea>
+
+      <div class="qtitle">Persönliche Kommentare & Beobachtungen</div>
+      <textarea id="k24_c" placeholder="Eigene Fragen, Irritationen, Lieblingsstelle, Vermutungen, offene Punkte…"></textarea>
+
+      <div class="teacher-only">
+        <div class="qtitle">Lehrerinnen-Kommentar</div>
+        <textarea id="k24_t" placeholder="Feedback, Beobachtungen, Beurteilungshinweise, nächste Schritte…"></textarea>
+      </div>
+
+      <button class="unlock-btn" onclick="unlockNext(24)">Nächstes Kapitel freischalten</button>
+    </section>
+
+
+    <section class="chapter" id="chapter25" data-unlocked="false" style="display:none">
+      <h2>Kapitel 25</h2>
+
+      <div class="qtitle">1) Inhaltssicherung (präzise): Was passiert in diesem Kapitel – in welcher Reihenfolge?</div>
+      <textarea class="answer" id="k25_q1" placeholder="Wichtig: konkrete Handlungsschritte, keine Allgemeinplätze."></textarea>
+
+      <div class="qtitle">2) Figuren: Wer handelt / spricht / entscheidet? Was wird über Motive oder Beziehungen sichtbar?</div>
+      <textarea class="answer" id="k25_q2" placeholder="Nenne Figuren + Textindizien (z.B. Verhalten, Aussagen, Konflikte)."></textarea>
+
+      <div class="qtitle">3) Raum & Natur: Welche Funktion haben Landschaft/Wetter/Naturbilder – Stimmung, Symbolik, Kontrast?</div>
+      <textarea class="answer short" id="k25_q3" placeholder="Beschreibe die Wirkung und (wenn möglich) eine Deutung."></textarea>
+
+      <div class="qtitle">4) Deutung/Analyse: Welche Spannung (sozial/moralisch/politisch) verdichtet sich hier – und wodurch?</div>
+      <textarea class="answer" id="k25_q4" placeholder="Arbeite mit Gegensätzen, Ursachen/Wirkungen, Figurenpositionen."></textarea>
+
+      <div class="qtitle">Persönliche Kommentare & Beobachtungen</div>
+      <textarea id="k25_c" placeholder="Eigene Fragen, Irritationen, Lieblingsstelle, Vermutungen, offene Punkte…"></textarea>
+
+      <div class="teacher-only">
+        <div class="qtitle">Lehrerinnen-Kommentar</div>
+        <textarea id="k25_t" placeholder="Feedback, Beobachtungen, Beurteilungshinweise, nächste Schritte…"></textarea>
+      </div>
+
+      <button class="unlock-btn" onclick="unlockNext(25)">Nächstes Kapitel freischalten</button>
+    </section>
+
+
+    <section class="chapter" id="chapter26" data-unlocked="false" style="display:none">
+      <h2>Kapitel 26</h2>
+
+      <div class="qtitle">1) Inhaltssicherung (präzise): Was passiert in diesem Kapitel – in welcher Reihenfolge?</div>
+      <textarea class="answer" id="k26_q1" placeholder="Wichtig: konkrete Handlungsschritte, keine Allgemeinplätze."></textarea>
+
+      <div class="qtitle">2) Figuren: Wer handelt / spricht / entscheidet? Was wird über Motive oder Beziehungen sichtbar?</div>
+      <textarea class="answer" id="k26_q2" placeholder="Nenne Figuren + Textindizien (z.B. Verhalten, Aussagen, Konflikte)."></textarea>
+
+      <div class="qtitle">3) Raum & Natur: Welche Funktion haben Landschaft/Wetter/Naturbilder – Stimmung, Symbolik, Kontrast?</div>
+      <textarea class="answer short" id="k26_q3" placeholder="Beschreibe die Wirkung und (wenn möglich) eine Deutung."></textarea>
+
+      <div class="qtitle">4) Deutung/Analyse: Welche Spannung (sozial/moralisch/politisch) verdichtet sich hier – und wodurch?</div>
+      <textarea class="answer" id="k26_q4" placeholder="Arbeite mit Gegensätzen, Ursachen/Wirkungen, Figurenpositionen."></textarea>
+
+      <div class="qtitle">Persönliche Kommentare & Beobachtungen</div>
+      <textarea id="k26_c" placeholder="Eigene Fragen, Irritationen, Lieblingsstelle, Vermutungen, offene Punkte…"></textarea>
+
+      <div class="teacher-only">
+        <div class="qtitle">Lehrerinnen-Kommentar</div>
+        <textarea id="k26_t" placeholder="Feedback, Beobachtungen, Beurteilungshinweise, nächste Schritte…"></textarea>
+      </div>
+
+      <button class="unlock-btn" onclick="unlockNext(26)">Nächstes Kapitel freischalten</button>
+    </section>
+
+
+    <section class="chapter" id="chapter27" data-unlocked="false" style="display:none">
+      <h2>Kapitel 27</h2>
+
+      <div class="qtitle">1) Inhaltssicherung (präzise): Was passiert in diesem Kapitel – in welcher Reihenfolge?</div>
+      <textarea class="answer" id="k27_q1" placeholder="Wichtig: konkrete Handlungsschritte, keine Allgemeinplätze."></textarea>
+
+      <div class="qtitle">2) Figuren: Wer handelt / spricht / entscheidet? Was wird über Motive oder Beziehungen sichtbar?</div>
+      <textarea class="answer" id="k27_q2" placeholder="Nenne Figuren + Textindizien (z.B. Verhalten, Aussagen, Konflikte)."></textarea>
+
+      <div class="qtitle">3) Raum & Natur: Welche Funktion haben Landschaft/Wetter/Naturbilder – Stimmung, Symbolik, Kontrast?</div>
+      <textarea class="answer short" id="k27_q3" placeholder="Beschreibe die Wirkung und (wenn möglich) eine Deutung."></textarea>
+
+      <div class="qtitle">4) Deutung/Analyse: Welche Spannung (sozial/moralisch/politisch) verdichtet sich hier – und wodurch?</div>
+      <textarea class="answer" id="k27_q4" placeholder="Arbeite mit Gegensätzen, Ursachen/Wirkungen, Figurenpositionen."></textarea>
+
+      <div class="qtitle">Persönliche Kommentare & Beobachtungen</div>
+      <textarea id="k27_c" placeholder="Eigene Fragen, Irritationen, Lieblingsstelle, Vermutungen, offene Punkte…"></textarea>
+
+      <div class="teacher-only">
+        <div class="qtitle">Lehrerinnen-Kommentar</div>
+        <textarea id="k27_t" placeholder="Feedback, Beobachtungen, Beurteilungshinweise, nächste Schritte…"></textarea>
+      </div>
+
+      <button class="unlock-btn" onclick="unlockNext(27)">Nächstes Kapitel freischalten</button>
+    </section>
+
+
+    <section class="chapter" id="chapter28" data-unlocked="false" style="display:none">
+      <h2>Kapitel 28</h2>
+
+      <div class="qtitle">1) Inhaltssicherung (präzise): Was passiert in diesem Kapitel – in welcher Reihenfolge?</div>
+      <textarea class="answer" id="k28_q1" placeholder="Wichtig: konkrete Handlungsschritte, keine Allgemeinplätze."></textarea>
+
+      <div class="qtitle">2) Figuren: Wer handelt / spricht / entscheidet? Was wird über Motive oder Beziehungen sichtbar?</div>
+      <textarea class="answer" id="k28_q2" placeholder="Nenne Figuren + Textindizien (z.B. Verhalten, Aussagen, Konflikte)."></textarea>
+
+      <div class="qtitle">3) Raum & Natur: Welche Funktion haben Landschaft/Wetter/Naturbilder – Stimmung, Symbolik, Kontrast?</div>
+      <textarea class="answer short" id="k28_q3" placeholder="Beschreibe die Wirkung und (wenn möglich) eine Deutung."></textarea>
+
+      <div class="qtitle">4) Deutung/Analyse: Welche Spannung (sozial/moralisch/politisch) verdichtet sich hier – und wodurch?</div>
+      <textarea class="answer" id="k28_q4" placeholder="Arbeite mit Gegensätzen, Ursachen/Wirkungen, Figurenpositionen."></textarea>
+
+      <div class="qtitle">Persönliche Kommentare & Beobachtungen</div>
+      <textarea id="k28_c" placeholder="Eigene Fragen, Irritationen, Lieblingsstelle, Vermutungen, offene Punkte…"></textarea>
+
+      <div class="teacher-only">
+        <div class="qtitle">Lehrerinnen-Kommentar</div>
+        <textarea id="k28_t" placeholder="Feedback, Beobachtungen, Beurteilungshinweise, nächste Schritte…"></textarea>
+      </div>
+
+      <button class="unlock-btn" onclick="unlockNext(28)">Nächstes Kapitel freischalten</button>
+    </section>
+
+
+    <section class="chapter" id="chapter29" data-unlocked="false" style="display:none">
+      <h2>Kapitel 29</h2>
+
+      <div class="qtitle">1) Inhaltssicherung (präzise): Was passiert in diesem Kapitel – in welcher Reihenfolge?</div>
+      <textarea class="answer" id="k29_q1" placeholder="Wichtig: konkrete Handlungsschritte, keine Allgemeinplätze."></textarea>
+
+      <div class="qtitle">2) Figuren: Wer handelt / spricht / entscheidet? Was wird über Motive oder Beziehungen sichtbar?</div>
+      <textarea class="answer" id="k29_q2" placeholder="Nenne Figuren + Textindizien (z.B. Verhalten, Aussagen, Konflikte)."></textarea>
+
+      <div class="qtitle">3) Raum & Natur: Welche Funktion haben Landschaft/Wetter/Naturbilder – Stimmung, Symbolik, Kontrast?</div>
+      <textarea class="answer short" id="k29_q3" placeholder="Beschreibe die Wirkung und (wenn möglich) eine Deutung."></textarea>
+
+      <div class="qtitle">4) Deutung/Analyse: Welche Spannung (sozial/moralisch/politisch) verdichtet sich hier – und wodurch?</div>
+      <textarea class="answer" id="k29_q4" placeholder="Arbeite mit Gegensätzen, Ursachen/Wirkungen, Figurenpositionen."></textarea>
+
+      <div class="qtitle">Persönliche Kommentare & Beobachtungen</div>
+      <textarea id="k29_c" placeholder="Eigene Fragen, Irritationen, Lieblingsstelle, Vermutungen, offene Punkte…"></textarea>
+
+      <div class="teacher-only">
+        <div class="qtitle">Lehrerinnen-Kommentar</div>
+        <textarea id="k29_t" placeholder="Feedback, Beobachtungen, Beurteilungshinweise, nächste Schritte…"></textarea>
+      </div>
+
+      <button class="unlock-btn" onclick="unlockNext(29)">Nächstes Kapitel freischalten</button>
+    </section>
+
+
+    <section class="chapter" id="chapter30" data-unlocked="false" style="display:none">
+      <h2>Kapitel 30</h2>
+
+      <div class="qtitle">1) Inhaltssicherung (präzise): Was passiert in diesem Kapitel – in welcher Reihenfolge?</div>
+      <textarea class="answer" id="k30_q1" placeholder="Wichtig: konkrete Handlungsschritte, keine Allgemeinplätze."></textarea>
+
+      <div class="qtitle">2) Figuren: Wer handelt / spricht / entscheidet? Was wird über Motive oder Beziehungen sichtbar?</div>
+      <textarea class="answer" id="k30_q2" placeholder="Nenne Figuren + Textindizien (z.B. Verhalten, Aussagen, Konflikte)."></textarea>
+
+      <div class="qtitle">3) Raum & Natur: Welche Funktion haben Landschaft/Wetter/Naturbilder – Stimmung, Symbolik, Kontrast?</div>
+      <textarea class="answer short" id="k30_q3" placeholder="Beschreibe die Wirkung und (wenn möglich) eine Deutung."></textarea>
+
+      <div class="qtitle">4) Deutung/Analyse: Welche Spannung (sozial/moralisch/politisch) verdichtet sich hier – und wodurch?</div>
+      <textarea class="answer" id="k30_q4" placeholder="Arbeite mit Gegensätzen, Ursachen/Wirkungen, Figurenpositionen."></textarea>
+
+      <div class="qtitle">Persönliche Kommentare & Beobachtungen</div>
+      <textarea id="k30_c" placeholder="Eigene Fragen, Irritationen, Lieblingsstelle, Vermutungen, offene Punkte…"></textarea>
+
+      <div class="teacher-only">
+        <div class="qtitle">Lehrerinnen-Kommentar</div>
+        <textarea id="k30_t" placeholder="Feedback, Beobachtungen, Beurteilungshinweise, nächste Schritte…"></textarea>
+      </div>
+
+      <button class="unlock-btn" onclick="unlockNext(30)">Nächstes Kapitel freischalten</button>
+    </section>
+
+
+    <section class="chapter" id="chapter31" data-unlocked="false" style="display:none">
+      <h2>Kapitel 31</h2>
+
+      <div class="qtitle">1) Inhaltssicherung (präzise): Was passiert in diesem Kapitel – in welcher Reihenfolge?</div>
+      <textarea class="answer" id="k31_q1" placeholder="Wichtig: konkrete Handlungsschritte, keine Allgemeinplätze."></textarea>
+
+      <div class="qtitle">2) Figuren: Wer handelt / spricht / entscheidet? Was wird über Motive oder Beziehungen sichtbar?</div>
+      <textarea class="answer" id="k31_q2" placeholder="Nenne Figuren + Textindizien (z.B. Verhalten, Aussagen, Konflikte)."></textarea>
+
+      <div class="qtitle">3) Raum & Natur: Welche Funktion haben Landschaft/Wetter/Naturbilder – Stimmung, Symbolik, Kontrast?</div>
+      <textarea class="answer short" id="k31_q3" placeholder="Beschreibe die Wirkung und (wenn möglich) eine Deutung."></textarea>
+
+      <div class="qtitle">4) Deutung/Analyse: Welche Spannung (sozial/moralisch/politisch) verdichtet sich hier – und wodurch?</div>
+      <textarea class="answer" id="k31_q4" placeholder="Arbeite mit Gegensätzen, Ursachen/Wirkungen, Figurenpositionen."></textarea>
+
+      <div class="qtitle">Persönliche Kommentare & Beobachtungen</div>
+      <textarea id="k31_c" placeholder="Eigene Fragen, Irritationen, Lieblingsstelle, Vermutungen, offene Punkte…"></textarea>
+
+      <div class="teacher-only">
+        <div class="qtitle">Lehrerinnen-Kommentar</div>
+        <textarea id="k31_t" placeholder="Feedback, Beobachtungen, Beurteilungshinweise, nächste Schritte…"></textarea>
+      </div>
+
+      <button class="unlock-btn" onclick="unlockNext(31)">Nächstes Kapitel freischalten</button>
+    </section>
+
+
+    <section class="chapter" id="chapter32" data-unlocked="false" style="display:none">
+      <h2>Kapitel 32</h2>
+
+      <div class="qtitle">1) Inhaltssicherung (präzise): Was passiert in diesem Kapitel – in welcher Reihenfolge?</div>
+      <textarea class="answer" id="k32_q1" placeholder="Wichtig: konkrete Handlungsschritte, keine Allgemeinplätze."></textarea>
+
+      <div class="qtitle">2) Figuren: Wer handelt / spricht / entscheidet? Was wird über Motive oder Beziehungen sichtbar?</div>
+      <textarea class="answer" id="k32_q2" placeholder="Nenne Figuren + Textindizien (z.B. Verhalten, Aussagen, Konflikte)."></textarea>
+
+      <div class="qtitle">3) Raum & Natur: Welche Funktion haben Landschaft/Wetter/Naturbilder – Stimmung, Symbolik, Kontrast?</div>
+      <textarea class="answer short" id="k32_q3" placeholder="Beschreibe die Wirkung und (wenn möglich) eine Deutung."></textarea>
+
+      <div class="qtitle">4) Deutung/Analyse: Welche Spannung (sozial/moralisch/politisch) verdichtet sich hier – und wodurch?</div>
+      <textarea class="answer" id="k32_q4" placeholder="Arbeite mit Gegensätzen, Ursachen/Wirkungen, Figurenpositionen."></textarea>
+
+      <div class="qtitle">Persönliche Kommentare & Beobachtungen</div>
+      <textarea id="k32_c" placeholder="Eigene Fragen, Irritationen, Lieblingsstelle, Vermutungen, offene Punkte…"></textarea>
+
+      <div class="teacher-only">
+        <div class="qtitle">Lehrerinnen-Kommentar</div>
+        <textarea id="k32_t" placeholder="Feedback, Beobachtungen, Beurteilungshinweise, nächste Schritte…"></textarea>
+      </div>
+
+      <button class="unlock-btn" onclick="unlockNext(32)">Nächstes Kapitel freischalten</button>
+    </section>
+
+
+    <section class="chapter" id="chapter33" data-unlocked="false" style="display:none">
+      <h2>Kapitel 33</h2>
+
+      <div class="qtitle">1) Inhaltssicherung (präzise): Was passiert in diesem Kapitel – in welcher Reihenfolge?</div>
+      <textarea class="answer" id="k33_q1" placeholder="Wichtig: konkrete Handlungsschritte, keine Allgemeinplätze."></textarea>
+
+      <div class="qtitle">2) Figuren: Wer handelt / spricht / entscheidet? Was wird über Motive oder Beziehungen sichtbar?</div>
+      <textarea class="answer" id="k33_q2" placeholder="Nenne Figuren + Textindizien (z.B. Verhalten, Aussagen, Konflikte)."></textarea>
+
+      <div class="qtitle">3) Raum & Natur: Welche Funktion haben Landschaft/Wetter/Naturbilder – Stimmung, Symbolik, Kontrast?</div>
+      <textarea class="answer short" id="k33_q3" placeholder="Beschreibe die Wirkung und (wenn möglich) eine Deutung."></textarea>
+
+      <div class="qtitle">4) Deutung/Analyse: Welche Spannung (sozial/moralisch/politisch) verdichtet sich hier – und wodurch?</div>
+      <textarea class="answer" id="k33_q4" placeholder="Arbeite mit Gegensätzen, Ursachen/Wirkungen, Figurenpositionen."></textarea>
+
+      <div class="qtitle">Persönliche Kommentare & Beobachtungen</div>
+      <textarea id="k33_c" placeholder="Eigene Fragen, Irritationen, Lieblingsstelle, Vermutungen, offene Punkte…"></textarea>
+
+      <div class="teacher-only">
+        <div class="qtitle">Lehrerinnen-Kommentar</div>
+        <textarea id="k33_t" placeholder="Feedback, Beobachtungen, Beurteilungshinweise, nächste Schritte…"></textarea>
+      </div>
+
+      <button class="unlock-btn" onclick="unlockNext(33)">Nächstes Kapitel freischalten</button>
+    </section>
+
+
+    <section class="chapter" id="chapter34" data-unlocked="false" style="display:none">
+      <h2>Kapitel 34</h2>
+
+      <div class="qtitle">1) Inhaltssicherung (präzise): Was passiert in diesem Kapitel – in welcher Reihenfolge?</div>
+      <textarea class="answer" id="k34_q1" placeholder="Wichtig: konkrete Handlungsschritte, keine Allgemeinplätze."></textarea>
+
+      <div class="qtitle">2) Figuren: Wer handelt / spricht / entscheidet? Was wird über Motive oder Beziehungen sichtbar?</div>
+      <textarea class="answer" id="k34_q2" placeholder="Nenne Figuren + Textindizien (z.B. Verhalten, Aussagen, Konflikte)."></textarea>
+
+      <div class="qtitle">3) Raum & Natur: Welche Funktion haben Landschaft/Wetter/Naturbilder – Stimmung, Symbolik, Kontrast?</div>
+      <textarea class="answer short" id="k34_q3" placeholder="Beschreibe die Wirkung und (wenn möglich) eine Deutung."></textarea>
+
+      <div class="qtitle">4) Deutung/Analyse: Welche Spannung (sozial/moralisch/politisch) verdichtet sich hier – und wodurch?</div>
+      <textarea class="answer" id="k34_q4" placeholder="Arbeite mit Gegensätzen, Ursachen/Wirkungen, Figurenpositionen."></textarea>
+
+      <div class="qtitle">Persönliche Kommentare & Beobachtungen</div>
+      <textarea id="k34_c" placeholder="Eigene Fragen, Irritationen, Lieblingsstelle, Vermutungen, offene Punkte…"></textarea>
+
+      <div class="teacher-only">
+        <div class="qtitle">Lehrerinnen-Kommentar</div>
+        <textarea id="k34_t" placeholder="Feedback, Beobachtungen, Beurteilungshinweise, nächste Schritte…"></textarea>
+      </div>
+
+      <button class="unlock-btn" onclick="unlockNext(34)">Nächstes Kapitel freischalten</button>
+    </section>
+
+
+    <section class="chapter" id="chapter35" data-unlocked="false" style="display:none">
+      <h2>Kapitel 35</h2>
+
+      <div class="qtitle">1) Inhaltssicherung (präzise): Was passiert in diesem Kapitel – in welcher Reihenfolge?</div>
+      <textarea class="answer" id="k35_q1" placeholder="Wichtig: konkrete Handlungsschritte, keine Allgemeinplätze."></textarea>
+
+      <div class="qtitle">2) Figuren: Wer handelt / spricht / entscheidet? Was wird über Motive oder Beziehungen sichtbar?</div>
+      <textarea class="answer" id="k35_q2" placeholder="Nenne Figuren + Textindizien (z.B. Verhalten, Aussagen, Konflikte)."></textarea>
+
+      <div class="qtitle">3) Raum & Natur: Welche Funktion haben Landschaft/Wetter/Naturbilder – Stimmung, Symbolik, Kontrast?</div>
+      <textarea class="answer short" id="k35_q3" placeholder="Beschreibe die Wirkung und (wenn möglich) eine Deutung."></textarea>
+
+      <div class="qtitle">4) Deutung/Analyse: Welche Spannung (sozial/moralisch/politisch) verdichtet sich hier – und wodurch?</div>
+      <textarea class="answer" id="k35_q4" placeholder="Arbeite mit Gegensätzen, Ursachen/Wirkungen, Figurenpositionen."></textarea>
+
+      <div class="qtitle">Persönliche Kommentare & Beobachtungen</div>
+      <textarea id="k35_c" placeholder="Eigene Fragen, Irritationen, Lieblingsstelle, Vermutungen, offene Punkte…"></textarea>
+
+      <div class="teacher-only">
+        <div class="qtitle">Lehrerinnen-Kommentar</div>
+        <textarea id="k35_t" placeholder="Feedback, Beobachtungen, Beurteilungshinweise, nächste Schritte…"></textarea>
+      </div>
+
+      <button class="unlock-btn" onclick="unlockNext(35)">Nächstes Kapitel freischalten</button>
+    </section>
+
+
+    <section class="chapter" id="chapter36" data-unlocked="false" style="display:none">
+      <h2>Kapitel 36</h2>
+
+      <div class="qtitle">1) Inhaltssicherung (präzise): Was passiert in diesem Kapitel – in welcher Reihenfolge?</div>
+      <textarea class="answer" id="k36_q1" placeholder="Wichtig: konkrete Handlungsschritte, keine Allgemeinplätze."></textarea>
+
+      <div class="qtitle">2) Figuren: Wer handelt / spricht / entscheidet? Was wird über Motive oder Beziehungen sichtbar?</div>
+      <textarea class="answer" id="k36_q2" placeholder="Nenne Figuren + Textindizien (z.B. Verhalten, Aussagen, Konflikte)."></textarea>
+
+      <div class="qtitle">3) Raum & Natur: Welche Funktion haben Landschaft/Wetter/Naturbilder – Stimmung, Symbolik, Kontrast?</div>
+      <textarea class="answer short" id="k36_q3" placeholder="Beschreibe die Wirkung und (wenn möglich) eine Deutung."></textarea>
+
+      <div class="qtitle">4) Deutung/Analyse: Welche Spannung (sozial/moralisch/politisch) verdichtet sich hier – und wodurch?</div>
+      <textarea class="answer" id="k36_q4" placeholder="Arbeite mit Gegensätzen, Ursachen/Wirkungen, Figurenpositionen."></textarea>
+
+      <div class="qtitle">Persönliche Kommentare & Beobachtungen</div>
+      <textarea id="k36_c" placeholder="Eigene Fragen, Irritationen, Lieblingsstelle, Vermutungen, offene Punkte…"></textarea>
+
+      <div class="teacher-only">
+        <div class="qtitle">Lehrerinnen-Kommentar</div>
+        <textarea id="k36_t" placeholder="Feedback, Beobachtungen, Beurteilungshinweise, nächste Schritte…"></textarea>
+      </div>
+
+      <button class="unlock-btn" onclick="unlockNext(36)">Nächstes Kapitel freischalten</button>
+    </section>
+
+
+    <section class="chapter" id="chapter37" data-unlocked="false" style="display:none">
+      <h2>Kapitel 37</h2>
+
+      <div class="qtitle">1) Inhaltssicherung (präzise): Was passiert in diesem Kapitel – in welcher Reihenfolge?</div>
+      <textarea class="answer" id="k37_q1" placeholder="Wichtig: konkrete Handlungsschritte, keine Allgemeinplätze."></textarea>
+
+      <div class="qtitle">2) Figuren: Wer handelt / spricht / entscheidet? Was wird über Motive oder Beziehungen sichtbar?</div>
+      <textarea class="answer" id="k37_q2" placeholder="Nenne Figuren + Textindizien (z.B. Verhalten, Aussagen, Konflikte)."></textarea>
+
+      <div class="qtitle">3) Raum & Natur: Welche Funktion haben Landschaft/Wetter/Naturbilder – Stimmung, Symbolik, Kontrast?</div>
+      <textarea class="answer short" id="k37_q3" placeholder="Beschreibe die Wirkung und (wenn möglich) eine Deutung."></textarea>
+
+      <div class="qtitle">4) Deutung/Analyse: Welche Spannung (sozial/moralisch/politisch) verdichtet sich hier – und wodurch?</div>
+      <textarea class="answer" id="k37_q4" placeholder="Arbeite mit Gegensätzen, Ursachen/Wirkungen, Figurenpositionen."></textarea>
+
+      <div class="qtitle">Persönliche Kommentare & Beobachtungen</div>
+      <textarea id="k37_c" placeholder="Eigene Fragen, Irritationen, Lieblingsstelle, Vermutungen, offene Punkte…"></textarea>
+
+      <div class="teacher-only">
+        <div class="qtitle">Lehrerinnen-Kommentar</div>
+        <textarea id="k37_t" placeholder="Feedback, Beobachtungen, Beurteilungshinweise, nächste Schritte…"></textarea>
+      </div>
+
+      <button class="unlock-btn" onclick="unlockNext(37)">Nächstes Kapitel freischalten</button>
+    </section>
+
+
+    <section class="chapter" id="chapter38" data-unlocked="false" style="display:none">
+      <h2>Kapitel 38</h2>
+
+      <div class="qtitle">1) Inhaltssicherung (präzise): Was passiert in diesem Kapitel – in welcher Reihenfolge?</div>
+      <textarea class="answer" id="k38_q1" placeholder="Wichtig: konkrete Handlungsschritte, keine Allgemeinplätze."></textarea>
+
+      <div class="qtitle">2) Figuren: Wer handelt / spricht / entscheidet? Was wird über Motive oder Beziehungen sichtbar?</div>
+      <textarea class="answer" id="k38_q2" placeholder="Nenne Figuren + Textindizien (z.B. Verhalten, Aussagen, Konflikte)."></textarea>
+
+      <div class="qtitle">3) Raum & Natur: Welche Funktion haben Landschaft/Wetter/Naturbilder – Stimmung, Symbolik, Kontrast?</div>
+      <textarea class="answer short" id="k38_q3" placeholder="Beschreibe die Wirkung und (wenn möglich) eine Deutung."></textarea>
+
+      <div class="qtitle">4) Deutung/Analyse: Welche Spannung (sozial/moralisch/politisch) verdichtet sich hier – und wodurch?</div>
+      <textarea class="answer" id="k38_q4" placeholder="Arbeite mit Gegensätzen, Ursachen/Wirkungen, Figurenpositionen."></textarea>
+
+      <div class="qtitle">Persönliche Kommentare & Beobachtungen</div>
+      <textarea id="k38_c" placeholder="Eigene Fragen, Irritationen, Lieblingsstelle, Vermutungen, offene Punkte…"></textarea>
+
+      <div class="teacher-only">
+        <div class="qtitle">Lehrerinnen-Kommentar</div>
+        <textarea id="k38_t" placeholder="Feedback, Beobachtungen, Beurteilungshinweise, nächste Schritte…"></textarea>
+      </div>
+
+      <button class="unlock-btn" onclick="unlockNext(38)">Nächstes Kapitel freischalten</button>
+    </section>
+
+
+    <section class="chapter" id="chapter39" data-unlocked="false" style="display:none">
+      <h2>Kapitel 39</h2>
+
+      <div class="qtitle">1) Inhaltssicherung (präzise): Was passiert in diesem Kapitel – in welcher Reihenfolge?</div>
+      <textarea class="answer" id="k39_q1" placeholder="Wichtig: konkrete Handlungsschritte, keine Allgemeinplätze."></textarea>
+
+      <div class="qtitle">2) Figuren: Wer handelt / spricht / entscheidet? Was wird über Motive oder Beziehungen sichtbar?</div>
+      <textarea class="answer" id="k39_q2" placeholder="Nenne Figuren + Textindizien (z.B. Verhalten, Aussagen, Konflikte)."></textarea>
+
+      <div class="qtitle">3) Raum & Natur: Welche Funktion haben Landschaft/Wetter/Naturbilder – Stimmung, Symbolik, Kontrast?</div>
+      <textarea class="answer short" id="k39_q3" placeholder="Beschreibe die Wirkung und (wenn möglich) eine Deutung."></textarea>
+
+      <div class="qtitle">4) Deutung/Analyse: Welche Spannung (sozial/moralisch/politisch) verdichtet sich hier – und wodurch?</div>
+      <textarea class="answer" id="k39_q4" placeholder="Arbeite mit Gegensätzen, Ursachen/Wirkungen, Figurenpositionen."></textarea>
+
+      <div class="qtitle">Persönliche Kommentare & Beobachtungen</div>
+      <textarea id="k39_c" placeholder="Eigene Fragen, Irritationen, Lieblingsstelle, Vermutungen, offene Punkte…"></textarea>
+
+      <div class="teacher-only">
+        <div class="qtitle">Lehrerinnen-Kommentar</div>
+        <textarea id="k39_t" placeholder="Feedback, Beobachtungen, Beurteilungshinweise, nächste Schritte…"></textarea>
+      </div>
+
+      <button class="unlock-btn" onclick="unlockNext(39)">Nächstes Kapitel freischalten</button>
+    </section>
+
+
+    <section class="chapter" id="chapter40" data-unlocked="false" style="display:none">
+      <h2>Kapitel 40</h2>
+
+      <div class="qtitle">1) Inhaltssicherung (präzise): Was passiert in diesem Kapitel – in welcher Reihenfolge?</div>
+      <textarea class="answer" id="k40_q1" placeholder="Wichtig: konkrete Handlungsschritte, keine Allgemeinplätze."></textarea>
+
+      <div class="qtitle">2) Figuren: Wer handelt / spricht / entscheidet? Was wird über Motive oder Beziehungen sichtbar?</div>
+      <textarea class="answer" id="k40_q2" placeholder="Nenne Figuren + Textindizien (z.B. Verhalten, Aussagen, Konflikte)."></textarea>
+
+      <div class="qtitle">3) Raum & Natur: Welche Funktion haben Landschaft/Wetter/Naturbilder – Stimmung, Symbolik, Kontrast?</div>
+      <textarea class="answer short" id="k40_q3" placeholder="Beschreibe die Wirkung und (wenn möglich) eine Deutung."></textarea>
+
+      <div class="qtitle">4) Deutung/Analyse: Welche Spannung (sozial/moralisch/politisch) verdichtet sich hier – und wodurch?</div>
+      <textarea class="answer" id="k40_q4" placeholder="Arbeite mit Gegensätzen, Ursachen/Wirkungen, Figurenpositionen."></textarea>
+
+      <div class="qtitle">Persönliche Kommentare & Beobachtungen</div>
+      <textarea id="k40_c" placeholder="Eigene Fragen, Irritationen, Lieblingsstelle, Vermutungen, offene Punkte…"></textarea>
+
+      <div class="teacher-only">
+        <div class="qtitle">Lehrerinnen-Kommentar</div>
+        <textarea id="k40_t" placeholder="Feedback, Beobachtungen, Beurteilungshinweise, nächste Schritte…"></textarea>
+      </div>
+
+      <button class="unlock-btn" onclick="unlockNext(40)">Nächstes Kapitel freischalten</button>
+    </section>
+
+
+    <section class="chapter" id="chapter41" data-unlocked="false" style="display:none">
+      <h2>Kapitel 41</h2>
+
+      <div class="qtitle">1) Inhaltssicherung (präzise): Was passiert in diesem Kapitel – in welcher Reihenfolge?</div>
+      <textarea class="answer" id="k41_q1" placeholder="Wichtig: konkrete Handlungsschritte, keine Allgemeinplätze."></textarea>
+
+      <div class="qtitle">2) Figuren: Wer handelt / spricht / entscheidet? Was wird über Motive oder Beziehungen sichtbar?</div>
+      <textarea class="answer" id="k41_q2" placeholder="Nenne Figuren + Textindizien (z.B. Verhalten, Aussagen, Konflikte)."></textarea>
+
+      <div class="qtitle">3) Raum & Natur: Welche Funktion haben Landschaft/Wetter/Naturbilder – Stimmung, Symbolik, Kontrast?</div>
+      <textarea class="answer short" id="k41_q3" placeholder="Beschreibe die Wirkung und (wenn möglich) eine Deutung."></textarea>
+
+      <div class="qtitle">4) Deutung/Analyse: Welche Spannung (sozial/moralisch/politisch) verdichtet sich hier – und wodurch?</div>
+      <textarea class="answer" id="k41_q4" placeholder="Arbeite mit Gegensätzen, Ursachen/Wirkungen, Figurenpositionen."></textarea>
+
+      <div class="qtitle">Persönliche Kommentare & Beobachtungen</div>
+      <textarea id="k41_c" placeholder="Eigene Fragen, Irritationen, Lieblingsstelle, Vermutungen, offene Punkte…"></textarea>
+
+      <div class="teacher-only">
+        <div class="qtitle">Lehrerinnen-Kommentar</div>
+        <textarea id="k41_t" placeholder="Feedback, Beobachtungen, Beurteilungshinweise, nächste Schritte…"></textarea>
+      </div>
+
+      
+    </section>
+
+
+  </div>
+</body>
+</html>
