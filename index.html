@@ -1755,8 +1755,10 @@ Textindizien: \"Dann stiegen sie  bisher im Waldegg;im Stöcklein mochten es sic
       return;
     }
 
-    const qtype = fbTypeFromId(textareaId);
-    const bank = qtype ? FEEDBACK_BANK[qtype] : null;
+    // WICHTIG: FEEDBACK_BANK ist in dieser Datei NICHT nach q1/q2/q3/q4 strukturiert,
+    // sondern pro konkretem Feld (z.B. k12_q3). Darum muss hier direkt per textareaId
+    // nachgeschlagen werden.
+    const bank = FEEDBACK_BANK[textareaId] || null;
 
     if(cnt===1){
       box.innerHTML = '<div class="fb-tag bad">Angabe falsch.</div>'
@@ -1766,14 +1768,14 @@ Textindizien: \"Dann stiegen sie  bisher im Waldegg;im Stöcklein mochten es sic
     }
 
     if(cnt===2){
-      const hint = bank ? bank.hint : 'Hinweis: Prüfe am Text (Wer? Was? Warum? Wodurch belegt?).';
+      const hint = bank && bank.hint ? bank.hint : 'Hinweis: Prüfe am Text (Wer? Was? Warum? Wodurch belegt?).';
       box.innerHTML = '<div class="fb-tag hint">Hinweis</div>'
         + escapeHtml(hint).replace(/\n/g,'<br>');
       box.classList.add('show');
       return;
     }
 
-    const model = bank ? bank.model : 'Mögliche Modelllösung: (Schema) …';
+    const model = bank && bank.model ? bank.model : 'Mögliche Modelllösung: (Schema) …';
     box.innerHTML = '<div class="fb-tag model">Mögliche Modelllösung</div>'
       + escapeHtml(model).replace(/\n/g,'<br>');
     box.classList.add('show');
